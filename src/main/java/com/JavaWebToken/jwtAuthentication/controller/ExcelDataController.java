@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/excel")
@@ -80,9 +81,26 @@ public class ExcelDataController {
     }
 
     @GetMapping("/elements")
-    public ResponseEntity<List<ExcelElement>> getExcelElementsBySheetName(@RequestParam String sheetName) {
-        List<ExcelElement> elements = excelDataService.getElementsBySheetName(sheetName);
-        System.out.println("🔍 Returning " + elements.size() + " elements for sheet: " + sheetName);
-        return ResponseEntity.ok(elements);
+    public ResponseEntity<List<ExcelElementDTO>> getExcelElementsBySheetName(@RequestParam String sheetName) {
+        try {
+            List<ExcelElement> elements = excelDataService.getElementsBySheetName(sheetName);
+
+            // Convert to DTO with elementId
+            List<ExcelElementDTO> elementDTOs = elements.stream()
+                    .map(element -> new ExcelElementDTO(
+                            element.getElementId(), // Use getElementId() from entity
+                            element.getExcelElement(),
+                            element.getExelCellValue()
+                    ))
+                    .collect(Collectors.toList());
+
+            System.out.println("🔍 Returning " + elementDTOs.size() + " elements for sheet: " + sheetName);
+            return ResponseEntity.ok(elementDTOs);
+
+        } catch (Exception e) {
+            System.err.println("❌ Error fetching elements for sheet " + sheetName + ": " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
     }
 }

@@ -124,6 +124,7 @@ public class ExcelDataService {
             elementDTOs = sheet.getExcelElements().stream()
                     .map(element -> {
                         ExcelElementDTO dto = new ExcelElementDTO();
+                        dto.setElementId(element.getElementId()); // Use setElementId()
                         dto.setExcelElement(element.getExcelElement());
                         dto.setExelCellValue(element.getExelCellValue());
                         return dto;
@@ -132,7 +133,7 @@ public class ExcelDataService {
         }
 
         ExcelSheetResponseDTO responseDTO = new ExcelSheetResponseDTO();
-        responseDTO.setOriginalSheetName(null); // Set if you have this data
+        responseDTO.setOriginalSheetName(null);
         responseDTO.setExcellSheetName(sheet.getExcellSheetName());
         responseDTO.setExcelElements(elementDTOs);
 
