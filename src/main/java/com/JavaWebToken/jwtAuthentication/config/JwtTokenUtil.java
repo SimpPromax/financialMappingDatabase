@@ -16,7 +16,8 @@ import java.util.function.Function;
 public class JwtTokenUtil {
     private static final long JWT_TOKEN_VALIDITY = 5 * 60 * 60 * 1000; // 5 hours
 
-    private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS512);
+    // Use a fixed secret key (must be at least 64 bytes for HS512)
+    private final Key key = Keys.hmacShaKeyFor("MySuperSecretKeyMySuperSecretKeyMySuperSecretKeyMySuperSecretKey".getBytes());
 
     public String getUsernameFromToken(String token) throws JwtException {
         return getClaimFromToken(token, Claims::getSubject);
