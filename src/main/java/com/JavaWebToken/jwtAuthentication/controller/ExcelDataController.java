@@ -83,16 +83,8 @@ public class ExcelDataController {
     @GetMapping("/elements")
     public ResponseEntity<List<ExcelElementDTO>> getExcelElementsBySheetName(@RequestParam String sheetName) {
         try {
-            List<ExcelElement> elements = excelDataService.getElementsBySheetName(sheetName);
-
-            // Convert to DTO with elementId
-            List<ExcelElementDTO> elementDTOs = elements.stream()
-                    .map(element -> new ExcelElementDTO(
-                            element.getElementId(), // Use getElementId() from entity
-                            element.getExcelElement(),
-                            element.getExelCellValue()
-                    ))
-                    .collect(Collectors.toList());
+            // Service already returns DTOs
+            List<ExcelElementDTO> elementDTOs = excelDataService.getElementsBySheetName(sheetName);
 
             System.out.println("🔍 Returning " + elementDTOs.size() + " elements for sheet: " + sheetName);
             return ResponseEntity.ok(elementDTOs);
@@ -103,4 +95,5 @@ public class ExcelDataController {
             return ResponseEntity.status(500).build();
         }
     }
+
 }

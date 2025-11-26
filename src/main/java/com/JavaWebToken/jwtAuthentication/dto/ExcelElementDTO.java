@@ -6,6 +6,8 @@ public class ExcelElementDTO {
     private Long elementId; // Changed from 'id' to 'elementId' to match entity
     private String excelElement;
     private String exelCellValue;
+    private String cellReference;  // ✅ Added cellReference
+
 
     // Constructors
     public ExcelElementDTO() {}
@@ -39,6 +41,12 @@ public class ExcelElementDTO {
 
     public void setExelCellValue(String exelCellValue) {
         this.exelCellValue = exelCellValue;
+    }
+    public String getCellReference() {
+        return cellReference;
+    }
+    public void setCellReference(String cellReference) {
+        this.cellReference = cellReference;
     }
 
     // Equals and HashCode

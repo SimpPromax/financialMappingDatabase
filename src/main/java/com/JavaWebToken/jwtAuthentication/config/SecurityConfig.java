@@ -19,7 +19,6 @@ import java.util.Arrays;
 
 @Configuration
 public class SecurityConfig {
-    //dependency injection via constructor
     private final CustomAuthenticationEntryPoint entryPoint;
     private final CustomUserDetailsService userDetailsService;
     private final JwtRequestFilter jwtRequestFilter;
@@ -32,51 +31,59 @@ public class SecurityConfig {
         this.jwtRequestFilter = jwtRequestFilter;
     }
 
-    //security filter chain configuration
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Add CORS configuration
-                .csrf(csrf -> csrf.disable())//disables csrf since the apis are stateless
+                // 1️⃣ Enable CORS first
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // 2️⃣ Disable CSRF since it's a stateless API
+                .csrf(csrf -> csrf.disable())
+                // 3️⃣ Exception handling
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(entryPoint)
+                )
+                // 4️⃣ Session management
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                // 5️⃣ Authorization rules
                 .authorizeHttpRequests(auth -> auth
+                        // public endpoints
                         .requestMatchers(
                                 "/public",
-                                "/public/",
                                 "/public/**",
                                 "/api/auth/register",
                                 "/api/auth/login",
                                 "/error",
                                 "/actuator/**",
-                                "/api/excel/**" // ADD THIS LINE - Allow Excel endpoints without authentication
-                        ).permitAll() // this are the endpoints which will be exempted from the security filter chain
-                        .requestMatchers("/admin/**").hasRole("ADMIN")// demonstrate role based access
-                        .anyRequest().authenticated()// all other apis pass the security chain
+                                "/api/excel-sheets",
+                                "/api/excel-elements",
+                                "/api/mappings",
+                                "/api/excel/**", // <-- allow Excel endpoints
+                                "/api/coa/**"    // <-- allow COA endpoints if needed
+                        ).permitAll()
+                        // admin-only endpoints
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        // all others require authentication
+                        .anyRequest().authenticated()
                 )
-                .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(entryPoint)// for exemptions we use our customauthenticationentrypoint
-                )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)// No HttpSession is created.This forces your app to fully authenticate every request using the JWT.
-                )
-                //spring security processes requests through a filter chain , if i dont specify the addbefore, the custom filter jwtRequestFilter will be added too late to be usefull
-                //in this case it has to run before the UsernamePasswordAuthenticationFilter so that it dont try to trigger a login attempt fot token-authenticated request
+                // 6️⃣ Add JWT filter before UsernamePasswordAuthenticationFilter
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
-        return http.build();// we are returning http.build() since we are modifying the httpsecurity we have to build it afresh to update the securityfilterchain
-        // wethout building it the updates would not be effective and the securitycontext would not work
+        return http.build();
     }
 
-    // CORS Configuration Source
+    // ✅ CORS configuration source
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:5173",
                 "http://localhost:3000",
-                "http://172.29.80.1:5173",
-                "http://192.168.100.116:5173" // <-- ADD THIS LINE for phone access
+                "http://192.168.100.118:5173", // your LAN frontend
+                "http://172.29.80.1:5173"
         ));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedMethods(Arrays.asList("GET","POST","PUT","DELETE","OPTIONS","PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
@@ -86,12 +93,11 @@ public class SecurityConfig {
         return source;
     }
 
-    //password encoder bean using bcrypt
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-    //authentication manager bean
+
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
