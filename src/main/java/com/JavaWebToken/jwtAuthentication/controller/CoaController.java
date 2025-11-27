@@ -76,5 +76,18 @@ public class CoaController {
         dto.setCoaId(saved.getCoaId());
         return ResponseEntity.ok(dto);
     }
+
+    // Delete COA by ID
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
+        try {
+            coaService.findById(id).orElseThrow(() -> new IllegalArgumentException("COA not found"));
+            coaService.deleteCoa(id);
+            return ResponseEntity.noContent().build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
 }
 

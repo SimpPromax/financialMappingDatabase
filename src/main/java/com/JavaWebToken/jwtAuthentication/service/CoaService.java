@@ -66,5 +66,10 @@ public class CoaService {
                 .toList();
     }
 
+    public void deleteCoa(Long id) {
+        coaRepository.deleteById(id);
+    }
+
+
 }
 
