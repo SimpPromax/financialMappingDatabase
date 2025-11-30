@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -78,6 +80,30 @@ public class ExcelDataService {
             sheet.setExcelElements(elements);
         }
         return sheets;
+    }
+
+    /**
+     * Retrieves the count of elements for every saved Excel sheet.
+     * Used for the client-side initial load optimization.
+     *
+     * @return A map where key is the sheet name (String) and value is the element count (Integer).
+     */
+    public Map<String, Integer> getAllSheetElementCounts() {
+        // 1. Get all sheets (this fetches minimal data if not already configured for eager loading)
+        List<ExcelSheet> sheets = sheetRepo.findAll();
+
+        Map<String, Integer> countsMap = new HashMap<>();
+
+        // 2. Iterate and count elements for each sheet
+        for (ExcelSheet sheet : sheets) {
+            // Find all elements for this sheet and get the size
+            int count = elementRepo.findBySheet_SheetIdOrderByExcelElement(sheet.getSheetId()).size();
+
+            // 3. Map sheet name to count
+            countsMap.put(sheet.getExcellSheetName(), count);
+        }
+
+        return countsMap;
     }
 
     public List<ExcelSheetResponseDTO> getAllSheetsWithDataAsDTO() {

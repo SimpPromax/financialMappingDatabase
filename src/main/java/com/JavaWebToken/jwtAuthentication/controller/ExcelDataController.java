@@ -96,4 +96,22 @@ public class ExcelDataController {
         }
     }
 
+    /**
+     * NEW: Endpoint to get the count of elements for all sheets in one request.
+     * The service layer is assumed to return a Map where key is the sheet name and value is the element count.
+     */
+    @GetMapping("/all-counts")
+    public ResponseEntity<Map<String, Integer>> getAllSheetElementCounts() {
+        try {
+            // Assumed service method to retrieve a map of {sheetName: elementCount}
+            Map<String, Integer> counts = excelDataService.getAllSheetElementCounts();
+            System.out.println("🔢 Returning element counts for " + counts.size() + " sheets.");
+            return ResponseEntity.ok(counts);
+        } catch (Exception e) {
+            System.err.println("❌ Error fetching all element counts: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).build();
+        }
+    }
+
 }
