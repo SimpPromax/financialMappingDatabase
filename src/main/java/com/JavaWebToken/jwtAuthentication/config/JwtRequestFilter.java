@@ -1,18 +1,8 @@
-
-//this is a subclass of onceperrequestfilter, it reads the authorization header
-// then it checks if it contains a jwt
-//then it validates the jwt
-//creates an authentication object and put it to the securitycontextholder
-
-
-
-
 package com.JavaWebToken.jwtAuthentication.config;
 
 import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
-import io.jsonwebtoken.security.SignatureException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.security.SecurityException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -56,17 +46,11 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 logger.error("JWT Token has expired");
                 handleException(response, "Token expired", HttpServletResponse.SC_UNAUTHORIZED);
                 return;
-            } catch (UnsupportedJwtException ex) {
-                logger.error("JWT Token is unsupported");
-                handleException(response, "Unsupported token", HttpServletResponse.SC_BAD_REQUEST);
-                return;
-            } catch (MalformedJwtException ex) {
-                logger.error("JWT Token is malformed");
-                handleException(response, "Invalid token format", HttpServletResponse.SC_BAD_REQUEST);
-                return;
-            } catch (SignatureException ex) {
-                logger.error("JWT signature does not match");
-                handleException(response, "Invalid token signature", HttpServletResponse.SC_UNAUTHORIZED);
+            } catch (JwtException ex) {
+                // Handle various JWT exceptions
+                String errorMessage = getJwtExceptionMessage(ex);
+                logger.error("JWT Token error: " + errorMessage, ex);
+                handleException(response, errorMessage, HttpServletResponse.SC_BAD_REQUEST);
                 return;
             } catch (IllegalArgumentException ex) {
                 logger.error("JWT claims string is empty");
@@ -87,6 +71,9 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                     authenticationToken.setDetails(
                             new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                } else {
+                    handleException(response, "Invalid token", HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
                 }
             } catch (UsernameNotFoundException ex) {
                 logger.error("User not found with username: " + username);
@@ -98,9 +85,24 @@ public class JwtRequestFilter extends OncePerRequestFilter {
         chain.doFilter(request, response);
     }
 
+    private String getJwtExceptionMessage(JwtException ex) {
+        if (ex.getMessage().contains("unsupported")) {
+            return "Unsupported token";
+        } else if (ex.getMessage().contains("malformed")) {
+            return "Invalid token format";
+        } else if (ex.getMessage().contains("signature") || ex.getMessage().contains("verification")) {
+            return "Invalid token signature";
+        } else if (ex.getMessage().contains("expired")) {
+            return "Token expired";
+        } else {
+            return "Invalid token";
+        }
+    }
+
     private void handleException(HttpServletResponse response, String message, int status) throws IOException {
         response.setContentType("application/json");
         response.setStatus(status);
-        response.getWriter().write(String.format("{\"error\": \"%s\"}", message));
+        response.getWriter().write(String.format("{\"error\": \"%s\", \"status\": %d}", message, status));
+        response.getWriter().flush();
     }
 }

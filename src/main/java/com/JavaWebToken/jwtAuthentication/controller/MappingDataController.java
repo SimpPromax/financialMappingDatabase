@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 
@@ -48,6 +49,19 @@ public class MappingDataController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.status(500).build();
+        }
+    }
+
+
+    // Add this to your existing MappingDataController
+    @DeleteMapping("/api/mappings/{mappingId}")
+    public ResponseEntity<?> deleteMapping(@PathVariable Long mappingId) {
+        try {
+            mappedCellService.deleteMapping(mappingId);
+            return ResponseEntity.ok().body(Map.of("message", "Mapping deleted successfully"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body(Map.of("error", "Failed to delete mapping: " + e.getMessage()));
         }
     }
 }

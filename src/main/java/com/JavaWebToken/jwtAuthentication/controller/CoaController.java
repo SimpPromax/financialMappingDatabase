@@ -1,7 +1,5 @@
 package com.JavaWebToken.jwtAuthentication.controller;
 
-
-
 import com.JavaWebToken.jwtAuthentication.dto.CoaDTO;
 import com.JavaWebToken.jwtAuthentication.entity.Coa;
 import com.JavaWebToken.jwtAuthentication.service.CoaService;
@@ -9,8 +7,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.stream.Collectors;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/coa")
@@ -18,10 +20,12 @@ import java.util.stream.Collectors;
 public class CoaController {
 
     private final CoaService coaService;
+    private final DataSource dataSource; // for SQL validation
+
+    // ------------------ CRUD ------------------
 
     @PostMapping
     public ResponseEntity<CoaDTO> create(@RequestBody CoaDTO dto) {
-        // basic validation - ensure sqlScript present
         if (dto.getSqlScript() == null || dto.getSqlScript().trim().isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
@@ -35,7 +39,6 @@ public class CoaController {
                 .build();
 
         Coa saved = coaService.createCoa(coa);
-
         dto.setCoaId(saved.getCoaId());
         return ResponseEntity.ok(dto);
     }
@@ -52,7 +55,7 @@ public class CoaController {
             d.setSqlScript(c.getSqlScript());
             d.setCreatedBy(c.getCreatedBy());
             return d;
-        }).collect(Collectors.toList());
+        }).toList();
         return ResponseEntity.ok(dtos);
     }
 
@@ -77,7 +80,6 @@ public class CoaController {
         return ResponseEntity.ok(dto);
     }
 
-    // Delete COA by ID
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
         try {
@@ -89,5 +91,38 @@ public class CoaController {
         }
     }
 
-}
+    // ------------------ SQL Validation ------------------
+    @PostMapping("/validate-sql")
+    public ResponseEntity<?> validateSql(@RequestBody Map<String, String> body) {
+        String sql = body.get("sqlScript");
+        if (sql == null || sql.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("valid", false, "error", "SQL is empty"));
+        }
 
+        String trimmed = sql.trim().toUpperCase();
+        if (!trimmed.startsWith("SELECT")) {
+            return ResponseEntity.badRequest().body(Map.of("valid", false, "error", "Only SELECT statements are allowed."));
+        }
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+
+            Object resultValue = null;
+            if (rs.next()) {
+                resultValue = rs.getObject(1); // first column of first row
+            }
+
+            return ResponseEntity.ok(Map.of(
+                    "valid", true,
+                    "value", resultValue
+            ));
+
+        } catch (SQLException e) {
+            return ResponseEntity.ok(Map.of(
+                    "valid", false,
+                    "error", e.getMessage()
+            ));
+        }
+    }
+}

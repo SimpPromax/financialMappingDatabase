@@ -2,11 +2,11 @@ package com.JavaWebToken.jwtAuthentication.config;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.security.SecurityException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,8 +16,11 @@ import java.util.function.Function;
 public class JwtTokenUtil {
     private static final long JWT_TOKEN_VALIDITY = 5 * 60 * 60 * 1000; // 5 hours
 
-    // Use a fixed secret key (must be at least 64 bytes for HS512)
-    private final Key key = Keys.hmacShaKeyFor("MySuperSecretKeyMySuperSecretKeyMySuperSecretKeyMySuperSecretKey".getBytes());
+    // Generate a secure key from the secret string
+    private final SecretKey key = Keys.hmacShaKeyFor(
+            "MySuperSecretKeyMySuperSecretKeyMySuperSecretKeyMySuperSecretKey"
+                    .getBytes(StandardCharsets.UTF_8)
+    );
 
     public String getUsernameFromToken(String token) throws JwtException {
         return getClaimFromToken(token, Claims::getSubject);
@@ -34,14 +37,15 @@ public class JwtTokenUtil {
 
     private Claims getAllClaimsFromToken(String token) throws JwtException {
         try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(key)
+            return Jwts.parser()
+                    .verifyWith(key)
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
         } catch (ExpiredJwtException ex) {
             throw ex; // Re-throw to handle specifically in the filter
-        } catch (UnsupportedJwtException | MalformedJwtException | SecurityException | IllegalArgumentException ex) {
+        } catch (UnsupportedJwtException | MalformedJwtException |
+                 SecurityException | IllegalArgumentException ex) {
             throw new JwtException("Invalid JWT token: " + ex.getMessage(), ex);
         }
     }
@@ -62,10 +66,10 @@ public class JwtTokenUtil {
 
     private String doGenerateToken(Map<String, Object> claims, String subject) {
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY))
+                .claims(claims)
+                .subject(subject)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + JWT_TOKEN_VALIDITY))
                 .signWith(key)
                 .compact();
     }
@@ -74,6 +78,25 @@ public class JwtTokenUtil {
         try {
             final String username = getUsernameFromToken(token);
             return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
+        } catch (JwtException ex) {
+            return false;
+        }
+    }
+
+    // Additional method to extract roles/authorities
+    public String getRoleFromToken(String token) {
+        Claims claims = getAllClaimsFromToken(token);
+        return claims.get("role", String.class);
+    }
+
+    // Method to validate token without UserDetails
+    public Boolean validateToken(String token) {
+        try {
+            Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
+            return !isTokenExpired(token);
         } catch (JwtException ex) {
             return false;
         }

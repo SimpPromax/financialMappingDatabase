@@ -59,6 +59,8 @@ public class SecurityConfig {
                                 "/api/excel-sheets",
                                 "/api/excel-elements",
                                 "/api/mappings",
+                                "/api/mappings/**",
+                                "/api/reports/**",
                                 "/api/excel/**", // <-- allow Excel endpoints
                                 "/api/coa/**"    // <-- allow COA endpoints if needed
                         ).permitAll()
