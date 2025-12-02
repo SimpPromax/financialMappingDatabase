@@ -131,16 +131,16 @@ public class ReportController {
         }
     }
 
-    @PostMapping("/generate/{sheetOrFileName}")
+    @PostMapping("/generate/{sheetName}")
     @Operation(summary = "Generate and download Excel report")
     public ResponseEntity<Resource> generateExcelReport(
-            @PathVariable String sheetOrFileName,
+            @PathVariable String sheetName,
             @RequestParam String startDate,
             @RequestParam String endDate) {
 
         try {
-            log.info("Generating Excel report: {}, dates: {} to {}",
-                    sheetOrFileName, startDate, endDate);
+            log.info("Generating Excel report for sheet: {}, dates: {} to {}",
+                    sheetName, startDate, endDate);
 
             LocalDate start = LocalDate.parse(startDate);
             LocalDate end = LocalDate.parse(endDate);
@@ -149,13 +149,14 @@ public class ReportController {
                 return ResponseEntity.badRequest().body(null);
             }
 
-            byte[] excelData = excelReportService.generateExcelReport(sheetOrFileName, start, end);
+            byte[] excelData = excelReportService.generateExcelReport(sheetName, start, end);
 
-            String timestamp = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-            String filename = String.format("Report_%s_%s_%s.xlsx",
-                    sheetOrFileName,
+            // Create download filename with the exact sheet name
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = String.format("%s_%s_to_%s.xlsx",
+                    sheetName.replace(".xls", "").replace(".xlsx", ""),
                     start.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
-                    timestamp);
+                    end.format(DateTimeFormatter.ofPattern("yyyyMMdd")));
 
             ByteArrayResource resource = new ByteArrayResource(excelData);
 
@@ -167,14 +168,14 @@ public class ReportController {
                     .body(resource);
 
         } catch (IOException e) {
-            log.error("Excel file error for {}: {}", sheetOrFileName, e.getMessage(), e);
+            log.error("Excel file error for {}: {}", sheetName, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(null);
         } catch (IllegalArgumentException e) {
-            log.error("Invalid argument for {}: {}", sheetOrFileName, e.getMessage(), e);
+            log.error("Invalid argument for {}: {}", sheetName, e.getMessage(), e);
             return ResponseEntity.badRequest().body(null);
         } catch (Exception e) {
-            log.error("Error generating report for {}: {}", sheetOrFileName, e.getMessage(), e);
+            log.error("Error generating report for {}: {}", sheetName, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(null);
         }
@@ -193,11 +194,11 @@ public class ReportController {
                     request.getEndDate()
             );
 
-            String timestamp = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-            String filename = String.format("Report_%s_%s_%s.xlsx",
-                    request.getSheetName(),
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = String.format("%s_%s_to_%s.xlsx",
+                    request.getSheetName().replace(".xls", "").replace(".xlsx", ""),
                     request.getStartDate().format(DateTimeFormatter.ofPattern("yyyyMMdd")),
-                    timestamp);
+                    request.getEndDate().format(DateTimeFormatter.ofPattern("yyyyMMdd")));
 
             ByteArrayResource resource = new ByteArrayResource(excelData);
 

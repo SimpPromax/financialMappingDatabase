@@ -21,7 +21,6 @@ import java.sql.Date;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +37,7 @@ public class ExcelReportService {
     @Transactional(readOnly = true)
     public List<String> getAllSheetNames() {
         try {
+            // Get exact sheet names from excel_sheets table
             List<String> excelSheets = reportRepository.getAllSheetNames();
 
             if (excelSheets.isEmpty()) {
@@ -47,10 +47,6 @@ public class ExcelReportService {
                         .map(UploadedFile::getFileName)
                         .filter(name -> name.toLowerCase().endsWith(".xlsx") ||
                                 name.toLowerCase().endsWith(".xls"))
-                        .map(name -> {
-                            // Extract base name without timestamp and GUID
-                            return extractBaseSheetName(name);
-                        })
                         .distinct()
                         .sorted()
                         .toList();
@@ -63,48 +59,12 @@ public class ExcelReportService {
         }
     }
 
-    // Helper to extract base sheet name from filename
-    private String extractBaseSheetName(String fileName) {
-        // Remove extension
-        String nameWithoutExt = fileName
-                .replace(".xlsx", "")
-                .replace(".XLSX", "")
-                .replace(".xls", "")
-                .replace(".XLS", "");
-
-        // Remove timestamp and GUID pattern: YYYYMMDD_HHMMSS_GUID_
-        String pattern = "^\\d{8}_\\d{6}_[a-f0-9]+_";
-        String cleanName = nameWithoutExt.replaceAll(pattern, "");
-
-        // If pattern not found, return original name
-        return cleanName.isEmpty() ? nameWithoutExt : cleanName;
-    }
-
     @Transactional(readOnly = true)
     public List<CellMappingDTO> getMappingsForSheet(String sheetName) {
-        log.info("Fetching mappings for sheet: {}", sheetName);
+        log.info("Fetching mappings for exact sheet name: {}", sheetName);
         try {
-            // First try with the exact sheet name
+            // Query with EXACT sheet name from excel_sheets table
             List<CellMappingDTO> mappings = reportRepository.getCellMappings(sheetName);
-
-            if (mappings.isEmpty()) {
-                // Try with base name (without extension)
-                String baseName = sheetName
-                        .replace(".xlsx", "")
-                        .replace(".xls", "")
-                        .replace(".XLSX", "")
-                        .replace(".XLS", "");
-                mappings = reportRepository.getCellMappings(baseName);
-
-                if (mappings.isEmpty()) {
-                    // Try to find any mapping that contains the sheet name
-                    List<CellMappingDTO> allMappings = reportRepository.getAllCellMappings();
-                    mappings = allMappings.stream()
-                            .filter(m -> m.getSheetName() != null &&
-                                    m.getSheetName().toLowerCase().contains(baseName.toLowerCase()))
-                            .toList();
-                }
-            }
 
             log.info("Found {} mappings for sheet: {}", mappings.size(), sheetName);
             return mappings;
@@ -130,19 +90,20 @@ public class ExcelReportService {
     public Map<String, Object> generateReportData(String sheetName,
                                                   LocalDate startDate,
                                                   LocalDate endDate) {
-        // Clean the sheet name - remove extension and timestamp/GUID if present
-        String cleanSheetName = extractBaseSheetName(sheetName);
+        // Use EXACT sheet name as it appears in excel_sheets table
+        log.info("Generating data for exact sheet: {}, period: {} to {}",
+                sheetName, startDate, endDate);
 
-        List<CellMappingDTO> mappings = getMappingsForSheet(cleanSheetName);
+        List<CellMappingDTO> mappings = getMappingsForSheet(sheetName);
         Map<String, Object> cellValues = new LinkedHashMap<>();
 
         if (mappings.isEmpty()) {
-            log.warn("No mappings found for sheet: {} (clean name: {})", sheetName, cleanSheetName);
+            log.warn("No mappings found for sheet: {}", sheetName);
             return cellValues;
         }
 
-        log.info("Generating data for {} mappings for sheet: {} (clean: {}), period: {} to {}",
-                mappings.size(), sheetName, cleanSheetName, startDate, endDate);
+        log.info("Generating data for {} mappings for sheet: {}",
+                mappings.size(), sheetName);
 
         for (CellMappingDTO mapping : mappings) {
             try {
@@ -173,34 +134,35 @@ public class ExcelReportService {
             }
         }
 
-        log.info("✅ Generated {} cell values for sheet: {}", cellValues.size(), cleanSheetName);
+        log.info("✅ Generated {} cell values for sheet: {}", cellValues.size(), sheetName);
         return cellValues;
     }
 
     @Transactional
-    public byte[] generateExcelReport(String sheetOrFileName,
+    public byte[] generateExcelReport(String sheetName,
                                       LocalDate startDate,
                                       LocalDate endDate) throws IOException {
-        log.info("Generating Excel report for: {}, dates: {} to {}",
-                sheetOrFileName, startDate, endDate);
+        log.info("Generating Excel report for sheet name: {}, dates: {} to {}",
+                sheetName, startDate, endDate);
 
-        File excelFile = findExcelFile(sheetOrFileName);
+        // Find the actual Excel file using EXACT sheet name
+        File excelFile = findExcelFile(sheetName);
 
         if (excelFile == null || !excelFile.exists()) {
             throw new FileNotFoundException(
-                    String.format("Excel file not found for '%s'. Checked in: %s",
-                            sheetOrFileName, uploadDir)
+                    String.format("Excel file not found for sheet '%s'. Checked in: %s",
+                            sheetName, uploadDir)
             );
         }
 
-        // Extract clean sheet name from filename
-        String cleanSheetName = extractBaseSheetName(excelFile.getName());
-        log.info("Processing file: {}, clean sheet name: {}", excelFile.getName(), cleanSheetName);
+        log.info("Found Excel file: {} for sheet name: {}",
+                excelFile.getAbsolutePath(), sheetName);
 
-        Map<String, Object> cellValues = generateReportData(cleanSheetName, startDate, endDate);
+        // Generate data using EXACT sheet name
+        Map<String, Object> cellValues = generateReportData(sheetName, startDate, endDate);
 
         if (cellValues.isEmpty()) {
-            log.warn("No data generated for sheet: {}. Returning template as-is.", cleanSheetName);
+            log.warn("No data generated for sheet: {}. Returning template as-is.", sheetName);
             // Return the template file without modifications
             try (FileInputStream fis = new FileInputStream(excelFile);
                  ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
@@ -233,13 +195,6 @@ public class ExcelReportService {
         sql = sql.replace("@startDate", "'" + startDate + "'")
                 .replace("@endDate", "'" + endDate + "'")
                 .replace("@year", "'" + startDate.getYear() + "'");
-
-        // Validate it's a SELECT query
-        String trimmedSql = sql.trim().toUpperCase();
-        if (!trimmedSql.startsWith("SELECT")) {
-            log.warn("SQL is not a SELECT query: {}", sql.substring(0, Math.min(50, sql.length())));
-            // Still return it, let executeSql handle the error
-        }
 
         return sql;
     }
@@ -297,63 +252,59 @@ public class ExcelReportService {
         }
     }
 
+    // SIMPLIFIED findExcelFile - uses exact names
     private File findExcelFile(String sheetName) {
-        log.info("Looking for Excel file for: {}", sheetName);
+        log.info("Looking for Excel file for sheet name: {}", sheetName);
 
-        // Clean the sheet name
-        String cleanSheetName = extractBaseSheetName(sheetName);
+        // 1. First, search in uploadedFileRepository by exact fileName
+        Optional<UploadedFile> upload = uploadedFileRepository.findByFileName(sheetName);
 
-        // First, try to find exact match in database
+        if (upload.isPresent()) {
+            File file = new File(upload.get().getFilePath());
+            if (file.exists()) {
+                log.info("Found exact match in uploaded files: {}", file.getAbsolutePath());
+                return file;
+            } else {
+                log.warn("File in database doesn't exist: {}", upload.get().getFilePath());
+            }
+        }
+
+        // 2. Search for files containing the sheet name
         List<UploadedFile> allFiles = uploadedFileRepository.findAll();
 
-        for (UploadedFile upload : allFiles) {
-            String fileName = upload.getFileName();
-            String fileNameWithoutExt = fileName
-                    .replace(".xlsx", "")
-                    .replace(".xls", "")
-                    .replace(".XLSX", "")
-                    .replace(".XLS", "");
+        for (UploadedFile uploadFile : allFiles) {
+            String dbFileName = uploadFile.getFileName();
+            String dbFilePath = uploadFile.getFilePath();
 
-            // Check if this file matches (with or without timestamp/GUID)
-            if (fileNameWithoutExt.equalsIgnoreCase(sheetName) ||
-                    fileNameWithoutExt.equalsIgnoreCase(cleanSheetName) ||
-                    extractBaseSheetName(fileName).equalsIgnoreCase(cleanSheetName)) {
-
-                File file = new File(upload.getFilePath());
+            // Check if this is the file we're looking for
+            if (dbFileName.equalsIgnoreCase(sheetName)) {
+                File file = new File(dbFilePath);
                 if (file.exists()) {
-                    log.info("Found matching file in database: {}", upload.getFileName());
+                    log.info("Found case-insensitive match: {}", dbFilePath);
                     return file;
-                } else {
-                    log.warn("File in database doesn't exist: {}", upload.getFilePath());
                 }
             }
         }
 
-        // If not found in database, search in upload directory
+        // 3. If not found in database, search in upload directory
         File uploadDirectory = new File(uploadDir);
         if (!uploadDirectory.exists()) {
             log.error("Upload directory doesn't exist: {}", uploadDir);
             return null;
         }
 
-        // Search for files with similar names
+        // Search for files with exact name match
         File[] allExcelFiles = uploadDirectory.listFiles((dir, name) ->
-                name.toLowerCase().endsWith(".xlsx") || name.toLowerCase().endsWith(".xls")
-        );
+                name.equalsIgnoreCase(sheetName) ||
+                        name.replace(".xlsx", "").replace(".xls", "")
+                                .equalsIgnoreCase(sheetName.replace(".xlsx", "").replace(".xls", "")));
 
-        if (allExcelFiles != null) {
-            for (File file : allExcelFiles) {
-                String fileName = file.getName();
-                String baseName = extractBaseSheetName(fileName);
-
-                if (baseName.equalsIgnoreCase(cleanSheetName)) {
-                    log.info("Found file in upload directory: {}", file.getName());
-                    return file;
-                }
-            }
+        if (allExcelFiles != null && allExcelFiles.length > 0) {
+            log.info("Found file in upload directory: {}", allExcelFiles[0].getAbsolutePath());
+            return allExcelFiles[0];
         }
 
-        log.error("Could not find Excel file for: {} (clean name: {})", sheetName, cleanSheetName);
+        log.error("Could not find Excel file for sheet name: {}", sheetName);
         return null;
     }
 
@@ -492,7 +443,7 @@ public class ExcelReportService {
         for (UploadedFile upload : uploads) {
             Map<String, Object> template = new HashMap<>();
             template.put("id", upload.getId());
-            template.put("fileName", upload.getFileName());
+            template.put("fileName", upload.getFileName());  // EXACT filename
             template.put("filePath", upload.getFilePath());
             template.put("uploadDate", upload.getDownloadDate());
             template.put("isWorkbook", upload.getIsWorkbook());
@@ -501,8 +452,8 @@ public class ExcelReportService {
             template.put("fileExists", file.exists());
             template.put("fileSize", file.exists() ? file.length() : 0);
 
-            // Add the clean sheet name for display
-            template.put("sheetName", extractBaseSheetName(upload.getFileName()));
+            // Use exact fileName as sheetName
+            template.put("sheetName", upload.getFileName());
 
             templates.add(template);
         }
@@ -515,25 +466,11 @@ public class ExcelReportService {
         // Try exact match first
         Optional<UploadedFile> upload = uploadedFileRepository.findByFileName(fileName);
 
-        if (upload.isEmpty()) {
-            // Try without extension
-            String nameWithoutExt = fileName
-                    .replace(".xlsx", "")
-                    .replace(".xls", "")
-                    .replace(".XLSX", "")
-                    .replace(".XLS", "");
-
-            List<UploadedFile> allFiles = uploadedFileRepository.findAll();
-            upload = allFiles.stream()
-                    .filter(f -> f.getFileName().toLowerCase().contains(nameWithoutExt.toLowerCase()))
-                    .findFirst();
-        }
-
         if (upload.isPresent()) {
             UploadedFile uploadedFile = upload.get();
             Map<String, Object> info = new HashMap<>();
             info.put("id", uploadedFile.getId());
-            info.put("fileName", uploadedFile.getFileName());
+            info.put("fileName", uploadedFile.getFileName());  // EXACT name
             info.put("filePath", uploadedFile.getFilePath());
             info.put("uploadDate", uploadedFile.getDownloadDate());
             info.put("isWorkbook", uploadedFile.getIsWorkbook());
@@ -541,20 +478,12 @@ public class ExcelReportService {
             File file = new File(uploadedFile.getFilePath());
             info.put("fileExists", file.exists());
             info.put("fileSize", file.exists() ? file.length() : 0);
-            info.put("sheetName", extractBaseSheetName(uploadedFile.getFileName()));
+            info.put("sheetName", uploadedFile.getFileName());  // EXACT name
 
             return info;
         }
 
         log.warn("Template info not found for: {}", fileName);
         return Collections.emptyMap();
-    }
-
-    // New method for preview (without writing to file)
-    @Transactional
-    public Map<String, Object> previewReportData(String sheetName,
-                                                 LocalDate startDate,
-                                                 LocalDate endDate) {
-        return generateReportData(sheetName, startDate, endDate);
     }
 }

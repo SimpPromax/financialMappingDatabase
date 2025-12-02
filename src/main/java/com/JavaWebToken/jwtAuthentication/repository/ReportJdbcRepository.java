@@ -23,7 +23,7 @@ public class ReportJdbcRepository {
                 c.coa_code as coaCode,
                 c.sql_script as sqlScript,
                 m.mapping_id as mappingId,
-                s.excell_sheet_name as sheetName  -- Added this
+                s.excell_sheet_name as sheetName
             FROM excel_elements e
             JOIN mapped_cell_info m ON e.element_id = m.element_id
             JOIN coa c ON m.coa_id = c.coa_id
@@ -40,7 +40,7 @@ public class ReportJdbcRepository {
                         rs.getString("coaCode"),
                         rs.getString("sqlScript"),
                         rs.getLong("mappingId"),
-                        rs.getString("sheetName")  // Added this
+                        rs.getString("sheetName")
                 ), sheetName);
     }
 
@@ -58,7 +58,7 @@ public class ReportJdbcRepository {
                 c.coa_code as coaCode,
                 c.sql_script as sqlScript,
                 m.mapping_id as mappingId,
-                s.excell_sheet_name as sheetName  -- Added this
+                s.excell_sheet_name as sheetName
             FROM excel_elements e
             JOIN mapped_cell_info m ON e.element_id = m.element_id
             JOIN coa c ON m.coa_id = c.coa_id
@@ -75,11 +75,10 @@ public class ReportJdbcRepository {
                         rs.getString("coaCode"),
                         rs.getString("sqlScript"),
                         rs.getLong("mappingId"),
-                        rs.getString("sheetName")  // Added this
+                        rs.getString("sheetName")
                 ), sheetId);
     }
 
-    // Add this new method
     public List<CellMappingDTO> getAllCellMappings() {
         String sql = """
             SELECT 
@@ -109,7 +108,6 @@ public class ReportJdbcRepository {
                 ));
     }
 
-    // Optional: Add method to get mappings for multiple sheets
     public List<CellMappingDTO> getCellMappingsBySheetNames(List<String> sheetNames) {
         if (sheetNames == null || sheetNames.isEmpty()) {
             return List.of();
