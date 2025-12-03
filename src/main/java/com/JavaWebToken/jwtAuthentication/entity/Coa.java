@@ -1,11 +1,13 @@
 package com.JavaWebToken.jwtAuthentication.entity;
 
-
-
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.Where;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "coa")
@@ -13,6 +15,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@SQLDelete(sql = "UPDATE coa SET archived = true WHERE coa_id = ?")
+
 public class Coa {
 
     @Id
@@ -45,10 +49,27 @@ public class Coa {
     @Column(name = "modified_date")
     private LocalDateTime modifiedDate;
 
+    // Archive fields
+    @Column(name = "archived", nullable = false)
+    @Builder.Default
+    private Boolean archived = false;
+
+    @Column(name = "archived_by")
+    private String archivedBy;
+
+    @Column(name = "archived_date")
+    private LocalDateTime archivedDate;
+
+    // Add relationship to versions
+    @OneToMany(mappedBy = "coa", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<CoaVersion> versions = new ArrayList<>();
+
     @PrePersist
     public void prePersist() {
         if (createdDate == null) createdDate = LocalDateTime.now();
         modifiedDate = LocalDateTime.now();
+        if (archived == null) archived = false;
     }
 
     @PreUpdate
@@ -56,4 +77,3 @@ public class Coa {
         modifiedDate = LocalDateTime.now();
     }
 }
-
